@@ -1,289 +1,297 @@
 using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Windows.Forms;
 
-namespace UniversityLab
+namespace SingleFileProject
 {
-    /// <summary>
-    /// Інтерфейс для обчислення віку.
-    /// </summary>
+    // =============================
+    //          INTERFACES
+    // =============================
+
     public interface IAgeable
     {
-        int GetAge(DateTime currentDate);
+        int GetAge(DateTime current);
     }
 
-    /// <summary>
-    /// Інтерфейс для вводу даних (абстрагує джерело вводу).
-    /// </summary>
     public interface IInputReader
     {
-        string ReadString(string prompt);
-        DateTime ReadDate(string prompt); // кидає FormatException, якщо користувач не дав правильну дату
-        char ReadLetter(string prompt);
-        int ReadInt(string prompt);
+        string ReadString(string message);
+        int ReadInt(string message);
+        DateTime ReadDate(string message);
+        char ReadLetter(string message);
     }
 
-    /// <summary>
-    /// Інтерфейс для запуску логіки вводу в об'єкта (модель не читає з консолі напряму).
-    /// </summary>
     public interface IInputable
     {
         void InputData(IInputReader reader);
     }
 
-    /// <summary>
-    /// Інтерфейс для підрахунку входжень символу в прізвищі.
-    /// </summary>
     public interface ICountLetter
     {
         int CountLetter(char letter);
     }
 
-    /// <summary>
-    /// Абстрактний базовий клас Людина.
-    /// </summary>
+    // =============================
+    //            SERVICES
+    // =============================
+
+    public class ConsoleInputReader : IInputReader
+    {
+        public string ReadString(string message)
+        {
+            Console.Write(message);
+            return Console.ReadLine();
+        }
+
+        public int ReadInt(string message)
+        {
+            int value;
+            Console.Write(message);
+            while (!int.TryParse(Console.ReadLine(), out value))
+            {
+                Console.WriteLine("Помилка! Введіть число.");
+                Console.Write(message);
+            }
+            return value;
+        }
+
+        public DateTime ReadDate(string message)
+        {
+            DateTime date;
+            Console.Write(message);
+            while (!DateTime.TryParse(Console.ReadLine(), out date))
+            {
+                Console.WriteLine("Невірний формат дати.");
+                Console.Write(message);
+            }
+            return date;
+        }
+
+        public char ReadLetter(string message)
+        {
+            Console.Write(message);
+            string s = Console.ReadLine();
+            return s.Length > 0 ? s[0] : ' ';
+        }
+    }
+
+    // =============================
+    //            MODELS
+    // =============================
+
     public abstract class Person : IAgeable, IInputable, ICountLetter
     {
-        /// <summary>Ім'я</summary>
         public string FirstName { get; private set; }
-
-        /// <summary>Прізвище</summary>
         public string Surname { get; private set; }
-
-        /// <summary>По-батькові</summary>
         public string Patronymic { get; private set; }
-
-        /// <summary>Дата народження</summary>
         public DateTime BirthDate { get; private set; }
 
-        protected Person() { }
-
-        protected Person(string firstName, string surname, string patronymic, DateTime birthDate)
+        protected void SetNames(string first, string last, string pat)
         {
-            SetNames(firstName, surname, patronymic);
-            SetBirthDate(birthDate);
+            if (string.IsNullOrWhiteSpace(first) || string.IsNullOrWhiteSpace(last))
+                throw new ArgumentException("Ім'я та прізвище обов'язкові.");
+
+            FirstName = first.Trim();
+            Surname = last.Trim();
+            Patronymic = string.IsNullOrWhiteSpace(pat) ? "" : pat.Trim();
         }
 
-        /// <summary>
-        /// Встановлює імена з валідацією.
-        /// </summary>
-        protected void SetNames(string firstName, string surname, string patronymic)
-        {
-            if (string.IsNullOrWhiteSpace(firstName)) throw new ArgumentException("FirstName is required");
-            if (string.IsNullOrWhiteSpace(surname)) throw new ArgumentException("Surname is required");
-            FirstName = firstName.Trim();
-            Surname = surname.Trim();
-            Patronymic = string.IsNullOrWhiteSpace(patronymic) ? string.Empty : patronymic.Trim();
-        }
-
-        /// <summary>
-        /// Встановлює дату народження з валідацією (не пізніше сьогодні).
-        /// </summary>
         protected void SetBirthDate(DateTime date)
         {
-            if (date > DateTime.Today) throw new ArgumentException("BirthDate cannot be in the future");
+            if (date > DateTime.Today)
+                throw new ArgumentException("Дата народження не може бути в майбутньому.");
+
             BirthDate = date.Date;
         }
 
-        /// <summary>
-        /// Абстрактний метод, щоб похідні класи могли додати специфічну інформацію.
-        /// </summary>
-        public abstract string GetRoleInfo();
-
-        /// <summary>
-        /// Обчислює вік на вказану дату.
-        /// </summary>
-        public virtual int GetAge(DateTime currentDate)
+        public virtual int GetAge(DateTime current)
         {
-            if (currentDate < BirthDate) throw new ArgumentException("Current date cannot be earlier than birth date");
-            int age = currentDate.Year - BirthDate.Year;
-            if (currentDate.Month < BirthDate.Month || (currentDate.Month == BirthDate.Month && currentDate.Day < BirthDate.Day))
+            int age = current.Year - BirthDate.Year;
+            if (current.Month < BirthDate.Month ||
+               (current.Month == BirthDate.Month && current.Day < BirthDate.Day))
                 age--;
+
             return age;
         }
 
-        /// <summary>
-        /// Підраховує входження літери в прізвищі (без врахування регістру).
-        /// </summary>
         public int CountLetter(char letter)
         {
-            if (string.IsNullOrEmpty(Surname)) return 0;
-            char lower = char.ToLowerInvariant(letter);
+            char target = char.ToLower(letter);
             int count = 0;
-            foreach (char c in Surname.ToLowerInvariant())
-            {
-                if (c == lower) count++;
-            }
+            foreach (char c in Surname.ToLower())
+                if (c == target) count++;
             return count;
         }
 
-        /// <summary>
-        /// Заповнення даних через IInputReader.
-        /// </summary>
+        public abstract string GetRoleInfo();
+
         public virtual void InputData(IInputReader reader)
         {
-            string first = reader.ReadString("Введіть ім'я: ");
-            string surname = reader.ReadString("Введіть прізвище: ");
-            string patronymic = reader.ReadString("Введіть по-батькові (можна пусто): ");
-            DateTime birth = reader.ReadDate("Введіть дату народження (дд.мм.rrrr або rrrr-mm-dd): ");
+            string first = reader.ReadString("Ім'я: ");
+            string last = reader.ReadString("Прізвище: ");
+            string pat = reader.ReadString("По-батькові: ");
+            DateTime bd = reader.ReadDate("Дата народження: ");
 
-            SetNames(first, surname, patronymic);
-            SetBirthDate(birth);
+            SetNames(first, last, pat);
+            SetBirthDate(bd);
         }
     }
 
-    /// <summary>
-    /// Клас Студент — похідний від Person.
-    /// </summary>
     public class Student : Person
     {
-        /// <summary>Рік вступу</summary>
         public int AdmissionYear { get; private set; }
-
-        /// <summary>Спеціальність</summary>
         public string Specialty { get; private set; }
-
-        public Student() : base() { }
-
-        public Student(string firstName, string surname, string patronymic, DateTime birthDate, int admissionYear, string specialty)
-            : base(firstName, surname, patronymic, birthDate)
-        {
-            SetAdmissionYear(admissionYear);
-            SetSpecialty(specialty);
-        }
 
         private void SetAdmissionYear(int year)
         {
-            if (year < 1900 || year > DateTime.Today.Year) throw new ArgumentException("Invalid admission year");
+            if (year < 1900 || year > DateTime.Now.Year)
+                throw new ArgumentException("Некоректний рік вступу.");
             AdmissionYear = year;
         }
 
-        private void SetSpecialty(string specialty)
+        private void SetSpecialty(string spec)
         {
-            if (string.IsNullOrWhiteSpace(specialty)) throw new ArgumentException("Specialty is required");
-            Specialty = specialty.Trim();
+            if (string.IsNullOrWhiteSpace(spec))
+                throw new ArgumentException("Спеціальність обов'язкова.");
+            Specialty = spec.Trim();
         }
 
-        public override string GetRoleInfo()
-        {
-            return $"Студент, спеціальність: {Specialty}, рік вступу: {AdmissionYear}";
-        }
+        public override string GetRoleInfo() =>
+            $"Студент ({Specialty}, {AdmissionYear} р.)";
 
         public override void InputData(IInputReader reader)
         {
-            // Викликаємо батьківський ввод
             base.InputData(reader);
-
-            int admYear = reader.ReadInt("Введіть рік вступу до ВУЗу: ");
-            string specialty = reader.ReadString("Введіть спеціальність: ");
-
-            SetAdmissionYear(admYear);
-            SetSpecialty(specialty);
+            SetAdmissionYear(reader.ReadInt("Рік вступу: "));
+            SetSpecialty(reader.ReadString("Спеціальність: "));
         }
     }
 
-    /// <summary>
-    /// Реалізація IInputReader для консолі з коректною валідацією.
-    /// </summary>
-    public class ConsoleInputReader : IInputReader
+    // =============================
+    //      GRAPHICS LOGIC
+    // =============================
+
+    public static class GraphLogic
     {
-        public string ReadString(string prompt)
+        public static List<PointF> CalculatePoints()
         {
-            Console.Write(prompt);
-            string? s = Console.ReadLine();
-            return s ?? string.Empty;
+            List<PointF> pts = new();
+
+            double xStart = 7.2;
+            double xEnd = 12.0;
+            double dx = 0.05;
+
+            for (double x = xStart; x <= xEnd; x += dx)
+            {
+                double z = (2 * Math.Pow(Math.Sin(x + 2), 2)) / (x * x + 1);
+                pts.Add(new PointF((float)x, (float)z));
+            }
+
+            return pts;
         }
 
-        public DateTime ReadDate(string prompt)
+        public static List<PointF> ScalePoints(List<PointF> world, Size sz)
         {
-            while (true)
-            {
-                Console.Write(prompt);
-                string? s = Console.ReadLine();
-                if (string.IsNullOrWhiteSpace(s))
-                {
-                    Console.WriteLine("Порожній ввід — спробуйте ще.");
-                    continue;
-                }
+            float minX = 7.2f, maxX = 12f;
 
-                // Спробуємо кілька форматів
-                if (DateTime.TryParse(s.Trim(), out DateTime dt))
-                {
-                    return dt.Date;
-                }
-                Console.WriteLine("Невірний формат дати. Спробуйте ще (наприклад 1999-12-31 або 31.12.1999).");
-            }
-        }
-
-        public char ReadLetter(string prompt)
-        {
-            while (true)
+            float minY = float.MaxValue, maxY = float.MinValue;
+            foreach (var p in world)
             {
-                Console.Write(prompt);
-                string? s = Console.ReadLine();
-                if (!string.IsNullOrEmpty(s))
-                {
-                    // беремо перший символ (коректніше вимагати один символ, але зручніше так)
-                    return s.Trim()[0];
-                }
-                Console.WriteLine("Порожній ввід — введіть принаймні один символ.");
+                minY = Math.Min(minY, p.Y);
+                maxY = Math.Max(maxY, p.Y);
             }
-        }
 
-        public int ReadInt(string prompt)
-        {
-            while (true)
+            List<PointF> scaled = new();
+
+            foreach (var p in world)
             {
-                Console.Write(prompt);
-                string? s = Console.ReadLine();
-                if (int.TryParse(s, out int res)) return res;
-                Console.WriteLine("Невірний ввід числа. Спробуйте ще.");
+                float sx = (p.X - minX) / (maxX - minX) * (sz.Width - 60) + 40;
+                float sy = sz.Height - ((p.Y - minY) / (maxY - minY) * (sz.Height - 60) + 40);
+                scaled.Add(new PointF(sx, sy));
             }
+
+            return scaled;
         }
     }
 
-    class Program
+    // =============================
+    //         CHART CONTROL
+    // =============================
+
+    public class ChartControl : Control
     {
+        private List<PointF> worldPoints;
+
+        public ChartControl()
+        {
+            this.DoubleBuffered = true;
+            this.ResizeRedraw = true;
+            worldPoints = GraphLogic.CalculatePoints();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            var g = e.Graphics;
+
+            List<PointF> scaled = GraphLogic.ScalePoints(worldPoints, ClientSize);
+
+            using Pen axis = new Pen(Color.Black, 2);
+            using Pen graph = new Pen(Color.Blue, 2);
+
+            // Осі
+            g.DrawLine(axis, 40, Height - 40, Width - 20, Height - 40);
+            g.DrawLine(axis, 40, 20, 40, Height - 40);
+
+            // Графік
+            for (int i = 0; i < scaled.Count - 1; i++)
+                g.DrawLine(graph, scaled[i], scaled[i + 1]);
+        }
+    }
+
+    // =============================
+    //            FORM
+    // =============================
+
+    public class GraphForm : Form
+    {
+        public GraphForm()
+        {
+            this.Text = "Графік функції z(x)";
+            this.Width = 900;
+            this.Height = 600;
+            Controls.Add(new ChartControl() { Dock = DockStyle.Fill });
+        }
+    }
+
+    // =============================
+    //           PROGRAM
+    // =============================
+
+    internal static class Program
+    {
+        [STAThread]
         static void Main()
         {
-            try
+            IInputReader reader = new ConsoleInputReader();
+
+            Console.WriteLine("=== Введення студента ===");
+            Student s = new Student();
+            s.InputData(reader);
+
+            DateTime now = reader.ReadDate("Поточна дата: ");
+            Console.WriteLine($"Вік: {s.GetAge(now)}");
+
+            char letter = reader.ReadLetter("Введіть літеру: ");
+            Console.WriteLine($"У прізвищі '{s.Surname}' літера '{letter}' зустрічається {s.CountLetter(letter)} разів.");
+
+            Console.WriteLine("\nПоказати графік? (y/n): ");
+            if (Console.ReadKey().Key == ConsoleKey.Y)
             {
-                IInputReader reader = new ConsoleInputReader();
-
-                Console.WriteLine("=== Введення даних для особи ===");
-                // Можна створити конкретну реалізацію Person (наприклад, тимчасовий клас) — але Person абстрактний,
-                // тому для демонстрації створимо Student і ще одного Student як 'Person' через поліморфізм.
-                Person personAsStudent = new Student();
-                personAsStudent.InputData(reader); // демонстрація IInputable через Person
-
-                Console.WriteLine("\n=== Введення даних для студента ===");
-                Student student = new Student();
-                student.InputData(reader);
-
-                // Поліморфізм: IAgeable
-                IAgeable ageable = student;
-
-                Console.WriteLine("\n=== Введення поточної дати для обчислення віку ===");
-                DateTime current = reader.ReadDate("Введіть поточну дату (щоб коректно порахувати вік): ");
-
-                int studentAge = ageable.GetAge(current);
-                Console.WriteLine($"\nВік студента ({student.FirstName} {student.Surname}): {studentAge} років");
-
-                // Підрахунок літери в прізвищі людини (використовуємо personAsStudent як Person)
-                char letter = reader.ReadLetter("\nВведіть літеру для підрахунку в прізвищі людини: ");
-                int occurrences = personAsStudent.CountLetter(letter);
-                Console.WriteLine($"Літера '{letter}' зустрічається в прізвищі {personAsStudent.Surname} {occurrences} раз(и).");
-
-                // Додатковий приклад: показати рольну інформацію (поліморфізм абстрактного методу)
-                Console.WriteLine("\nІнформація про роль:");
-                Console.WriteLine(personAsStudent.GetRoleInfo());
-                Console.WriteLine(student.GetRoleInfo());
+                Application.EnableVisualStyles();
+                Application.Run(new GraphForm());
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Сталася помилка: {ex.Message}");
-            }
-
-            Console.WriteLine("\nНатисніть будь-яку клавішу для виходу...");
-            Console.ReadKey();
         }
     }
 }
